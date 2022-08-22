@@ -76,7 +76,7 @@ dbutils.fs.rm(silverPath, recurse=True)
 
 # COMMAND ----------
 
-bronzeDF = spark.read.table("movie_bronze").filter(col("status") == "new")
+bronzeDF = spark.read.table("movie_bronze")
 
 # COMMAND ----------
 
@@ -85,7 +85,7 @@ bronzeDF = spark.read.table("movie_bronze").filter(col("status") == "new")
 
 # COMMAND ----------
 
-bronzeAugmentDF = bronzeDF.select("value", "value.*")
+bronzeAugmentDF = bronzeDF.select("value", "value.*")|
 
 # COMMAND ----------
 
@@ -225,7 +225,7 @@ display(silver_language_clean)
     "languageID"
     )
     .write.format("delta")
-    .mode("append")
+    .mode("overwrite")
     .partitionBy("p_CreatedDate")
     .save(silverPath+"movie/")
 )
