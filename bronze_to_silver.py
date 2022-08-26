@@ -67,16 +67,24 @@ dbutils.fs.rm(silverPath, recurse=True)
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Load New Records from the Bronze Records
-# MAGIC 
-# MAGIC **EXERCISE**
-# MAGIC 
-# MAGIC Load all records from the Bronze table with a status of `"new"`.
+bronzeDf.printSchema()
 
 # COMMAND ----------
 
-bronzeDF = spark.read.table("movie_bronze")
+# MAGIC %md
+# MAGIC ## Load New Records from the Bronze Records
+
+# COMMAND ----------
+
+from pyspark.sql.functions import to_date
+bronzeDf = spark.read.table("movie_bronze")
+ingesttimeWidget = dbutils.widgets.text("date", "2022-08-26")
+bronzeDfWidget= bronzeDf.filter(bronzeDf.p_ingestdate == to_date(dbutils.widgets.get("date"),"yyyy-MM-dd" ))
+
+
+# COMMAND ----------
+
+display(bronzeDfWidget)
 
 # COMMAND ----------
 
@@ -85,12 +93,11 @@ bronzeDF = spark.read.table("movie_bronze")
 
 # COMMAND ----------
 
-bronzeAugmentDF = bronzeDF.select("value", "value.*")|
+bronzeAugmentDF = bronzeDfWidget.select("value", "value.*")
 
 # COMMAND ----------
 
 from pyspark.sql.functions import col, when
-
 
 silver_movie = (bronzeAugmentDF.select(
     "value",
@@ -100,7 +107,6 @@ silver_movie = (bronzeAugmentDF.select(
     col("CreatedDate").cast("date").alias("p_CreatedDate"),
     "Id",
     "ImdbUrl",
-    "OriginalLanguage",
     "Overview",
     "PosterUrl",
     "Price",
@@ -156,6 +162,16 @@ display(silver_genre)
 
 # COMMAND ----------
 
+silver_junction_movie_genre = silver_movie.select(
+  col("Id").alias("movieID"),
+  explode(silver_movie.genreID).alias("genreID"))
+
+# COMMAND ----------
+
+display (silver_junction_movie_genre)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## Quarantine the Bad Data
 
@@ -172,6 +188,10 @@ silver_movie_quarantine = silver_movie.filter(silver_movie.RunTime < 0).distinct
 # COMMAND ----------
 
 display(silver_movie_clean)
+
+# COMMAND ----------
+
+display(silver_movie_quarantine)
 
 # COMMAND ----------
 
@@ -209,7 +229,6 @@ display(silver_language_clean)
     "p_CreatedDate",
     "Id",
     "ImdbUrl",
-    "OriginalLanguage",
     "Overview",
     "PosterUrl",
     "Price",
@@ -248,6 +267,11 @@ LOCATION "{silverPath+"movie/"}"
 
 # COMMAND ----------
 
+# MAGIC %sql
+# MAGIC select * from movie_silver
+
+# COMMAND ----------
+
 #dbutils.fs.rm(silverPath+"movie/", recurse=True)
 
 # COMMAND ----------
@@ -259,7 +283,7 @@ LOCATION "{silverPath+"movie/"}"
     "genreName"
     )
     .write.format("delta")
-    .mode("append")
+    .mode("overwrite")
     .partitionBy("genreID")
     .save(silverPath+"genre/")
 )
@@ -283,11 +307,6 @@ LOCATION "{silverPath+"genre/"}"
 
 # COMMAND ----------
 
-
-display(spark.sql("""select * from movie_silver"""))
-
-# COMMAND ----------
-
 display(spark.sql("""select * from genre_silver"""))
 
 # COMMAND ----------
@@ -296,7 +315,7 @@ display(spark.sql("""select * from genre_silver"""))
 (
     silver_language_clean
     .write.format("delta")
-    .mode("append")
+    .mode("overwrite")
     .partitionBy("languageID")
     .save(silverPath+"language/")
 )
@@ -320,6 +339,37 @@ LOCATION "{silverPath+"language/"}"
 # COMMAND ----------
 
 display(spark.sql("""select * from language_silver"""))
+
+# COMMAND ----------
+
+#write junction table batch to a silver table
+(
+    silver_junction_movie_genre
+    .write.format("delta")
+    .mode("overwrite")
+    .save(silverPath+"junction/")
+)
+
+# COMMAND ----------
+
+spark.sql(
+    """
+DROP TABLE IF EXISTS junction_silver
+"""
+)
+
+spark.sql(
+    f"""
+CREATE TABLE junction_silver
+USING DELTA
+LOCATION "{silverPath+"junction/"}"
+"""
+)
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from junction_silver
 
 # COMMAND ----------
 

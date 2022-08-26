@@ -63,6 +63,10 @@ display(raw_movie_df)
 
 # COMMAND ----------
 
+#dbutils.fs.rm(bronzePath, recurse=True)
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## WRITE Batch to a Bronze Table
 
@@ -95,7 +99,6 @@ display(dbutils.fs.ls(bronzePath))
 
 # COMMAND ----------
 
-# ANSWER
 spark.sql(
     """
 DROP TABLE IF EXISTS movie_bronze
